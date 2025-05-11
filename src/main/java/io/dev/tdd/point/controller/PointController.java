@@ -26,8 +26,7 @@ public class PointController {
     @GetMapping("{id}")
     public UserPoint getPoint(@PathVariable long id){
         UserPoint userPoint = pointService.getPoint(id);
-
-        return userPoint; // // ResponseEntity.ok ->> 200 OK와 함께 객체 반환
+        return userPoint;
     }
 
     /**
@@ -35,11 +34,10 @@ public class PointController {
      * @param id
      * @return
      */
-    @GetMapping("{id}/histories")
+    @GetMapping("{id}/history")
     public List<PointHistory> getHistories(@PathVariable long id){
-        List<PointHistory> pointHistories = pointService.getHistories(id);
-
-        return pointHistories;
+        List<PointHistory> pointHistoryList = pointService.getHistories(id);
+        return pointHistoryList;
     }
 
     /**
