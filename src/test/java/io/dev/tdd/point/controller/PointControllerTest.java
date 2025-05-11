@@ -1,128 +1,114 @@
 package io.dev.tdd.point.controller;
 
 import io.dev.tdd.point.PointHistory;
-import io.dev.tdd.point.TransactionType;
 import io.dev.tdd.point.UserPoint;
-import io.dev.tdd.point.repository.PointHistoryRepository;
-import io.dev.tdd.point.repository.UserPointRepository;
 import io.dev.tdd.point.service.PointService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.ResultActions;
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
+import org.springframework.test.web.servlet.result.MockMvcResultHandlers;
+import org.springframework.test.web.servlet.result.MockMvcResultMatchers;
 
+
+import java.util.Collections;
 import java.util.List;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.BDDMockito.given;
 
-import static org.assertj.core.api.Assertions.*;
-import static org.mockito.Mockito.*;
-
+@AutoConfigureMockMvc
+@WebMvcTest(PointController.class)
 class PointControllerTest {
 
+    @Autowired
+    public MockMvc mockMvc;
+
+    @MockBean
     private PointService pointService;
-    private UserPointRepository userPointRepository;
-    private PointHistoryRepository pointHistoryRepository;
+
+    private UserPoint userPoint;
 
     @BeforeEach
     void setUp() {
-        userPointRepository = mock(UserPointRepository.class);
-        pointHistoryRepository = mock(PointHistoryRepository.class);
-        pointService = new PointService(userPointRepository, pointHistoryRepository);
+        userPoint = new UserPoint(1L, 1000L, System.currentTimeMillis());
     }
 
-    /**
-     * 포인트 조회
-     * @throws Exception
-     */
     @Test
-    void getPoint() throws Exception {
-        long userId = 1L;
-        UserPoint userPoint = new UserPoint(userId, 0, System.currentTimeMillis());
+    void testGetPoint() throws Exception {
+        // given
+        long id = 1L;
+        given(pointService.getPoint(id)).willReturn(userPoint);
 
-        when(userPointRepository.selectById(userId)).thenReturn(userPoint);
+        //when
+        ResultActions resultActions = mockMvc.perform(MockMvcRequestBuilders.get("/point/{id}", id));
 
-        UserPoint result = pointService.getPoint(userId);
-
-        assertThat(result).isNotNull();
-        assertThat(result.id()).isEqualTo(userId);
-        assertThat(result.point()).isEqualTo(0);
+        //then
+        resultActions .andExpect(MockMvcResultMatchers.status().isOk()) // 200 OK
+                .andExpect(MockMvcResultMatchers.jsonPath("$.id").value(id)) // id 값 확인
+                .andDo(MockMvcResultHandlers.print())
+                .andReturn();
     }
 
-    /**
-     * 포인트 충전
-     * @throws Exception
-     */
     @Test
-    void chargePoint() throws Exception {
-        long userId = 1L;
+    void testGetHistory() throws Exception {
+        // given
+        long id = 1L;
+        List<PointHistory> pointHistoryList = Collections.emptyList();
+        given(pointService.getHistories(id)).willReturn(pointHistoryList);
+
+        //when
+        ResultActions resultActions = mockMvc.perform(MockMvcRequestBuilders.get("/point/{id}/history", id));
+
+        //then
+        resultActions .andExpect(MockMvcResultMatchers.status().isOk())
+                .andExpect(MockMvcResultMatchers.jsonPath("$").isArray())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.length()").value(0))
+                .andDo(MockMvcResultHandlers.print())
+                .andReturn();
+    }
+
+    @Test
+    void testCharge() throws Exception {
+        // given
+        long id = 1L;
         long amount = 500L;
-        UserPoint current = new UserPoint(userId, 0L, System.currentTimeMillis());
-        UserPoint updated = new UserPoint(userId, 500L, System.currentTimeMillis());
+        given(pointService.charge(id, amount)).willReturn(userPoint);
 
-        when(userPointRepository.selectById(userId)).thenReturn(current);
-        when(userPointRepository.insertOrUpdate(userId, 500L)).thenReturn(updated);
+        //when
+        ResultActions resultActions = mockMvc.perform(MockMvcRequestBuilders.patch("/point/{id}/charge", id)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(String.valueOf(amount)));
 
-        UserPoint result = pointService.charge(userId, amount);
-
-        assertThat(result.point()).isEqualTo(500L);
-        verify(pointHistoryRepository).insert(eq(userId), eq(amount), eq(TransactionType.CHARGE), anyLong());
+        //then
+        resultActions .andExpect(MockMvcResultMatchers.status().isOk())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.id").value(id))
+                .andDo(MockMvcResultHandlers.print())
+                .andReturn();
     }
 
-    /**
-     * 포인트 사용
-     * @throws Exception
-     */
     @Test
-    void usePoint_success() throws Exception {
-        long userId = 1L;
-        long amount = 300L;
-        UserPoint current = new UserPoint(userId, 1000L, System.currentTimeMillis());
-        UserPoint updated = new UserPoint(userId, 700L, System.currentTimeMillis());
+    void testUse() throws Exception {
+        // given
+        long id = 1L;
+        long amount = 500L;
+        given(pointService.use(id, amount)).willReturn(userPoint);
 
-        when(userPointRepository.selectById(userId)).thenReturn(current);
-        when(userPointRepository.insertOrUpdate(userId, 700L)).thenReturn(updated);
+        //when
+        ResultActions resultActions = mockMvc.perform(MockMvcRequestBuilders.patch("/point/{id}/use", id)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(String.valueOf(amount)));
 
-        UserPoint result = pointService.use(userId, amount);
-
-        assertThat(result.point()).isEqualTo(700L);
-        verify(pointHistoryRepository).insert(eq(userId), eq(amount), eq(TransactionType.USE), anyLong());
-    }
-
-    /**
-     * 포인트 사용 실패
-     * @throws Exception
-     */
-    @Test
-    void usePoint_fail() throws Exception {
-        long userId = 1L;
-        long amount = 1500L;
-        UserPoint current = new UserPoint(userId, 1000L, System.currentTimeMillis());
-
-        when(userPointRepository.selectById(userId)).thenReturn(current);
-
-        assertThatThrownBy(() -> pointService.use(userId, amount))
-                .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining("잔고가 부족합니다.");
-    }
-
-    /**
-     * 포인트 내역 조회
-     * @throws Exception
-     */
-    @Test
-    void getPointHistory() {
-        long userId = 1L;
-        List<PointHistory> histories = List.of(
-                new PointHistory(1L, userId, 500L, TransactionType.CHARGE, System.currentTimeMillis()),
-                new PointHistory(2L, userId, 300L, TransactionType.USE, System.currentTimeMillis())
-        );
-
-        when(pointHistoryRepository.selectAllByUserId(userId)).thenReturn(histories);
-
-        List<PointHistory> result = pointService.getHistories(userId);
-
-        assertThat(result).hasSize(2);
-        assertThat(result.get(0).type()).isEqualTo(TransactionType.CHARGE);
-        assertThat(result.get(1).type()).isEqualTo(TransactionType.USE);
+        //then
+        resultActions .andExpect(MockMvcResultMatchers.status().isOk())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.id").value(id))
+                .andDo(MockMvcResultHandlers.print())
+                .andReturn();
     }
 
 }
